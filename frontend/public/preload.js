@@ -5,8 +5,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
-  // API Key Management
-  saveApiKey: (serviceName, apiKey) => ipcRenderer.invoke('save-api-key', serviceName, apiKey),
+  // Credential Management
+  saveCredential: (serviceName, username, password) => ipcRenderer.invoke('save-credential', serviceName, username, password),
 
   // We can expose other backend functions here as we build them.
   // For example:

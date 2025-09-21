@@ -1,99 +1,148 @@
-import os
-from enum import Enum
-from ..core.security import get_api_key
+import json
+import asyncio
+from pathlib import Path
+from playwright.async_api import async_playwright, Page, Browser
+from ..core.security import get_credential
 from ..core.prompt_library import get_cv_optimization_prompt, get_cover_letter_prompt
 
-# (Placeholder) Import actual client libraries when implementing fully
-# import openai
-# import google.generativeai as genai
-# import anthropic
+# --- Configuration Loader ---
 
-class AITaskType(Enum):
-    """Defines the type of task for the AI to perform, influencing model selection."""
-    ANALYSIS = "analysis"  # For tasks like keyword extraction, matching
-    CREATIVE_WRITING = "creative_writing"  # For tasks like cover letter generation
-    GENERAL = "general"  # For balanced, general-purpose tasks
+def _load_selectors():
+    """Loads the CSS selectors from the JSON file."""
+    selectors_path = Path(__file__).parent.parent / "core" / "selectors.json"
+    with open(selectors_path, 'r') as f:
+        return json.load(f)
 
-class AIModelProvider(Enum):
-    """Defines the AI provider to use."""
-    OPENAI = "openai"
-    GOOGLE = "google"
-    ANTHROPIC = "anthropic"
+SELECTORS = _load_selectors()
 
-def _call_openai(prompt: str, model: str) -> str:
-    """Placeholder for calling the OpenAI API."""
-    api_key = get_api_key(AIModelProvider.OPENAI.value)
-    if not api_key:
-        raise ValueError("OpenAI API key not found. Please set it in the settings.")
-    # client = openai.OpenAI(api_key=api_key)
-    # response = client.chat.completions.create(...)
-    print(f"--- FAKE OPENAI CALL --- \nModel: {model}\nPrompt: {prompt[:100]}...\n--- END FAKE CALL ---")
-    return f"Fake response from OpenAI model {model} for prompt: '{prompt[:50]}...'"
+# --- Base Class for AI Web Interaction ---
 
-def _call_google(prompt: str, model: str) -> str:
-    """Placeholder for calling the Google Gemini API."""
-    api_key = get_api_key(AIModelProvider.GOOGLE.value)
-    if not api_key:
-        raise ValueError("Google API key not found. Please set it in the settings.")
-    # genai.configure(api_key=api_key)
-    # model = genai.GenerativeModel(model)
-    # response = model.generate_content(...)
-    print(f"--- FAKE GOOGLE CALL --- \nModel: {model}\nPrompt: {prompt[:100]}...\n--- END FAKE CALL ---")
-    return f"Fake response from Google model {model} for prompt: '{prompt[:50]}...'"
-
-def _call_anthropic(prompt: str, model: str) -> str:
-    """Placeholder for calling the Anthropic Claude API."""
-    api_key = get_api_key(AIModelProvider.ANTHROPIC.value)
-    if not api_key:
-        raise ValueError("Anthropic API key not found. Please set it in the settings.")
-    # client = anthropic.Anthropic(api_key=api_key)
-    # response = client.messages.create(...)
-    print(f"--- FAKE ANTHROPIC CALL --- \nModel: {model}\nPrompt: {prompt[:100]}...\n--- END FAKE CALL ---")
-    return f"Fake response from Anthropic model {model} for prompt: '{prompt[:50]}...'"
-
-
-def get_ai_response(prompt: str, task_type: AITaskType) -> str:
+class BaseAIInteractor:
     """
-    Routes a request to the appropriate LLM based on the task type.
-
-    This is the core "AI Router" logic.
+    Abstract base class for an AI web UI automation interactor.
+    Manages a Playwright page and defines the interaction workflow.
     """
-    print(f"Routing AI request for task type: {task_type.value}")
+    def __init__(self, browser: Browser, service_name: str):
+        if not browser:
+            raise ValueError("A Playwright Browser instance is required.")
+        self.browser = browser
+        self.service_name = service_name
+        self.selectors = SELECTORS.get(service_name)
+        if not self.selectors:
+            raise ValueError(f"Selectors for service '{service_name}' not found in selectors.json")
+        self.page = None
 
-    if task_type == AITaskType.ANALYSIS:
-        # Use a fast and cheap model for analysis.
-        # As per prompt, GPT-4o mini or Gemini 2.0 Flash. Let's use Gemini.
-        model = "gemini-2.0-flash"
-        return _call_google(prompt, model)
+    async def initialize(self):
+        """Initializes a new browser page for interaction."""
+        self.page = await self.browser.new_page()
+        print(f"[{self.service_name}] New page initialized.")
 
-    elif task_type == AITaskType.CREATIVE_WRITING:
-        # Use a high-quality model for creative tasks.
-        # As per prompt, Claude Sonnet 4.
-        model = "claude-4-sonnet"
-        return _call_anthropic(prompt, model)
+    async def login(self, username: str, password: str):
+        """Placeholder for logging into the service."""
+        print(f"[{self.service_name}] Navigating to login page: {self.selectors['login_url']}")
+        await self.page.goto(self.selectors['login_url'])
 
-    elif task_type == AITaskType.GENERAL:
-        # Use a balanced, powerful model for general tasks.
-        # As per prompt, GPT-4o or Gemini 2.5 Pro. Let's use GPT-4o.
-        model = "gpt-4o"
-        return _call_openai(prompt, model)
+        print(f"[{self.service_name}] Filling username...")
+        await self.page.fill(self.selectors['username_input'], username)
+        # Some sites require a 'continue' click after username
+        if self.selectors.get('username_continue_button'):
+            await self.page.click(self.selectors['username_continue_button'])
 
-    else:
-        raise ValueError(f"Unknown AI task type: {task_type}")
+        print(f"[{self.service_name}] Filling password...")
+        await self.page.fill(self.selectors['password_input'], password)
 
-# Example of how this might be used with the prompt library
-def generate_optimized_cv_content(job_description: str, user_cv: str) -> str:
+        print(f"[{self.service_name}] Clicking login button...")
+        await self.page.click(self.selectors['login_button'])
+        await self.page.wait_for_load_state('networkidle')
+        print(f"[{self.service_name}] Login process completed.")
+
+    async def send_prompt(self, prompt: str) -> str:
+        """Sends a prompt to the chat interface and gets the response."""
+        print(f"[{self.service_name}] Typing prompt into: {self.selectors['chat_input_box']}")
+        await self.page.fill(self.selectors['chat_input_box'], prompt)
+
+        print(f"[{self.service_name}] Clicking send button...")
+        await self.page.click(self.selectors['send_button'])
+
+        # Wait for the response to be complete.
+        # A robust way is to wait for the "stop generating" button to disappear.
+        stop_button_selector = self.selectors['stop_generating_button']
+        print(f"[{self.service_name}] Waiting for response to complete (waiting for '{stop_button_selector}' to be hidden)...")
+        await self.page.wait_for_selector(stop_button_selector, state='hidden', timeout=120000)
+
+        print(f"[{self.service_name}] Scraping response from: {self.selectors['last_response_element']}")
+        response_text = await self.page.locator(self.selectors['last_response_element']).last.inner_text()
+        return response_text.strip()
+
+    async def close(self):
+        """Closes the page."""
+        if self.page:
+            await self.page.close()
+
+# --- Concrete Implementations ---
+
+class ChatGPTInteractor(BaseAIInteractor):
+    def __init__(self, browser: Browser):
+        super().__init__(browser, "openai")
+
+class GeminiInteractor(BaseAIInteractor):
+    def __init__(self, browser: Browser):
+        super().__init__(browser, "google")
+
+class ClaudeInteractor(BaseAIInteractor):
+    def __init__(self, browser: Browser):
+        super().__init__(browser, "anthropic")
+
+
+# --- Main Engine Controller ---
+
+class AIEngine:
     """
-    Generates optimized CV content based on a job description.
+    Manages AI interaction by selecting the appropriate web interactor.
     """
-    prompt = get_cv_optimization_prompt(job_description, user_cv)
-    # CV optimization is a mix of analysis and writing, let's use the General model
-    return get_ai_response(prompt, AITaskType.GENERAL)
+    def __init__(self, browser: Browser):
+        self._browser = browser
+        self._interactors = {
+            "openai": ChatGPTInteractor(browser),
+            "google": GeminiInteractor(browser),
+            "anthropic": ClaudeInteractor(browser),
+        }
 
-def generate_cover_letter_content(job_description: str, user_cv: str, company_mission: str = "") -> str:
-    """
-    Generates a personalized cover letter.
-    """
-    prompt = get_cover_letter_prompt(job_description, user_cv, company_mission)
-    # Cover letter is a creative task
-    return get_ai_response(prompt, AITaskType.CREATIVE_WRITING)
+    def get_interactor(self, service_name: str) -> BaseAIInteractor:
+        """Gets the interactor instance for the specified service."""
+        interactor = self._interactors.get(service_name.lower())
+        if not interactor:
+            raise ValueError(f"No interactor found for service: {service_name}")
+        return interactor
+
+# Example usage
+async def main():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False, slow_mo=50)
+        engine = AIEngine(browser)
+
+        # 1. Get the right interactor
+        service = "openai"
+        interactor = engine.get_interactor(service)
+        await interactor.initialize()
+
+        # 2. Get credentials securely
+        # NOTE: In the real app, the username would be stored in the local DB.
+        # For this test, we'll hardcode it.
+        username_to_test = "test@example.com"
+        password = get_credential(service, username_to_test)
+
+        if password:
+            # This part would run in the real app if credentials are found
+            print(f"Found password for {username_to_test}, proceeding with login.")
+            # await interactor.login(username_to_test, password)
+            # response = await interactor.send_prompt("Hello, world!")
+            # print("AI Response:", response)
+        else:
+            print(f"Could not find password for {username_to_test} in keychain. Skipping interaction.")
+
+        await interactor.close()
+        await browser.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -1,0 +1,36 @@
+{
+  "openai": {
+    "login_url": "https://chat.openai.com/auth/login",
+    "username_input": "input[name='username']",
+    "password_input": "input[name='password']",
+    "login_button": "button[type='submit']",
+    "chat_input_box": "textarea#prompt-textarea",
+    "send_button": "button[data-testid='send-button']",
+    "response_container": "div[data-testid^='conversation-turn-']",
+    "last_response_element": "div[data-testid^='conversation-turn-']:last-child .markdown",
+    "stop_generating_button": "button[aria-label='Stop generating']"
+  },
+  "google": {
+    "login_url": "https://accounts.google.com/",
+    "username_input": "input[type='email']",
+    "password_input": "input[type='password']",
+    "login_button": "#passwordNext",
+    "gemini_chat_url": "https://gemini.google.com/app",
+    "chat_input_box": "div.ql-editor.ql-blank",
+    "send_button": "button.send-button",
+    "response_container": "message-content",
+    "last_response_element": "message-content:last-of-type .output-content",
+    "stop_generating_button": "button[aria-label='Stop generating']"
+  },
+  "anthropic": {
+    "login_url": "https://claude.ai/login",
+    "username_input": "input[name='email']",
+    "password_input": "input[name='password']",
+    "login_button": "button[type='submit']",
+    "chat_input_box": "div.ProseMirror",
+    "send_button": "button[aria-label='Send Message']",
+    "response_container": "div.group.flex",
+    "last_response_element": "div.group.flex:last-of-type .leading-relaxed",
+    "stop_generating_button": "button[aria-label='Stop generating']"
+  }
+}

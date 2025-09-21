@@ -1,50 +1,50 @@
 from fastapi import APIRouter, HTTPException, status, Body
-from ..models.settings import ApiKey
-from ..core.security import save_api_key, get_api_key, delete_api_key
+from ..models.settings import ServiceCredential
+from ..core.security import save_credential, get_credential, delete_credential
 
 router = APIRouter(
     prefix="/settings",
     tags=["Settings"],
 )
 
-@router.post("/api-key", status_code=status.HTTP_201_CREATED)
-def set_api_key(api_key_data: ApiKey):
+@router.post("/credential", status_code=status.HTTP_201_CREATED)
+def set_credential(credential_data: ServiceCredential):
     """
-    Saves an API key securely in the OS keychain.
+    Saves a service credential (username and password) securely in the OS keychain.
     """
-    if not api_key_data.service_name or not api_key_data.api_key:
+    if not all([credential_data.service_name, credential_data.username, credential_data.password]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Service name and API key cannot be empty."
+            detail="Service name, username, and password cannot be empty."
         )
     try:
-        save_api_key(api_key_data.service_name, api_key_data.api_key)
-        return {"message": f"API key for '{api_key_data.service_name}' saved successfully."}
+        save_credential(credential_data.service_name, credential_data.username, credential_data.password)
+        return {"message": f"Credential for '{credential_data.username}' on service '{credential_data.service_name}' saved."}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save API key: {e}"
+            detail=f"Failed to save credential: {e}"
         )
 
-@router.get("/api-key/{service_name}", response_model=dict)
-def check_api_key(service_name: str):
+@router.get("/credential/{service_name}/{username}", response_model=dict)
+def check_credential(service_name: str, username: str):
     """
-    Checks if an API key for a given service exists.
-    Does not return the key itself for security.
+    Checks if a credential for a given service and username exists.
+    Does not return the password itself for security.
     """
-    key = get_api_key(service_name)
-    return {"service_name": service_name, "exists": key is not None}
+    password = get_credential(service_name, username)
+    return {"service_name": service_name, "username": username, "exists": password is not None}
 
-@router.delete("/api-key/{service_name}", status_code=status.HTTP_200_OK)
-def remove_api_key(service_name: str):
+@router.delete("/credential/{service_name}/{username}", status_code=status.HTTP_200_OK)
+def remove_credential(service_name: str, username: str):
     """
-    Deletes an API key from the OS keychain.
+    Deletes a credential from the OS keychain.
     """
     try:
-        delete_api_key(service_name)
-        return {"message": f"API key for '{service_name}' deleted successfully."}
+        delete_credential(service_name, username)
+        return {"message": f"Credential for '{username}' on service '{service_name}' deleted."}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete API key: {e}"
+            detail=f"Failed to delete credential: {e}"
         )

@@ -49,17 +49,19 @@ ipcMain.handle('get-app-version', () => {
     return app.getVersion();
 });
 
-ipcMain.handle('save-api-key', async (event, serviceName, apiKey) => {
-  console.log(`Received save-api-key event for service: ${serviceName}`);
+ipcMain.handle('save-credential', async (event, serviceName, username, password) => {
+  console.log(`Received save-credential event for service: ${serviceName}`);
   try {
-    const response = await axios.post(`${BACKEND_URL}/api/settings/api-key`, {
+    const response = await axios.post(`${BACKEND_URL}/api/settings/credential`, {
       service_name: serviceName,
-      api_key: apiKey,
+      username: username,
+      password: password,
     });
     console.log('Backend response:', response.data);
     return { success: true, data: response.data };
   } catch (error) {
-    console.error('Failed to save API key via backend:', error.response ? error.response.data : error.message);
-    return { success: false, error: error.response ? error.response.data.detail : 'Network error' };
+    const errorMessage = error.response ? error.response.data.detail : 'Network error or backend is not running.';
+    console.error('Failed to save credential via backend:', errorMessage);
+    return { success: false, error: errorMessage };
   }
 });

@@ -2,15 +2,18 @@
 
 **AutoApply Asistanı**, kullanıcıların LinkedIn, Indeed ve hiring.cafe gibi platformlarda iş başvuru süreçlerini otomatikleştiren, üretim kalitesinde bir masaüstü uygulamasıdır.
 
-Bu uygulama, akıllı otomasyon ve çoklu yapay zeka (LLM) entegrasyonunu bir araya getirerek, her bir iş ilanı için özelleştirilmiş CV'ler ve ön yazılar oluşturur, başvuru formlarını otomatik olarak doldurur ve tüm süreci kullanıcı dostu bir arayüz üzerinden yönetir.
+Bu uygulama, akıllı otomasyon ve **doğrudan yapay zeka web arayüzü otomasyonunu** bir araya getirerek, her bir iş ilanı için özelleştirilmiş CV'ler ve ön yazılar oluşturur, başvuru formlarını otomatik olarak doldurur ve tüm süreci kullanıcı dostu bir arayüz üzerinden yönetir.
 
-## Temel Özellikler
+## Mimari Yaklaşımı: Web Arayüzü Otomasyonu
+
+Bu proje, LLM'lerle etkileşim kurmak için API'leri kullanmak yerine, **doğrudan yapay zeka servislerinin (ChatGPT, Gemini, Claude) web arayüzlerini otomatikleştiren** bir yaklaşım benimser. Bu, kullanıcının kendi hesabıyla oturum açarak, prompt'ları metin kutusuna yazarak ve sonuçları doğrudan sayfadan kazıyarak yapılır.
+
+### Temel Özellikler
 
 *   **Çoklu Platform Otomasyonu:** Popüler iş platformlarında otomatik iş arama ve başvuru.
+*   **Yapay Zeka Web Arayüzü Otomasyonu:** API'ler yerine ChatGPT, Gemini, Claude gibi servislerin web sitelerini doğrudan otomatize eder.
 *   **Akıllı Doküman Üretimi:** Her başvuru için ilana özel CV ve ön yazı oluşturma.
-*   **Çoklu LLM Desteği:** En iyi sonuçlar için OpenAI, Google ve Anthropic modellerini kullanma.
-*   **Etkileşimli Form Doldurma:** Bilinmeyen soruları kullanıcıya sorarak öğrenme ve Soru-Cevap Bankası'na kaydetme.
-*   **Güvenlik ve Gizlilik:** Tüm kullanıcı verileri yerel olarak ve şifrelenmiş bir şekilde saklanır.
+*   **Güvenlik ve Gizlilik:** Tüm kullanıcı verileri ve **hassas kimlik bilgileri (parolalar)**, işletim sisteminin yerel anahtar zincirinde (keychain) güvenli bir şekilde saklanır.
 
 ## Teknolojiler
 
@@ -30,26 +33,18 @@ Projeyi yerel makinenizde çalıştırmak için aşağıdaki adımları izleyin.
 *   [Node.js](https://nodejs.org/) (LTS sürümü tavsiye edilir)
 *   [Python](https://www.python.org/downloads/) (3.9 veya üstü)
 
-### 1. Projeyi Klonlama
+### 1. Backend Bağımlılıklarını Yükleme
 
 ```bash
-git clone <proje-repo-url>
-cd <proje-klasoru>
-```
-
-### 2. Backend Bağımlılıklarını Yükleme
-
-```bash
+# Proje kök dizinindeyken
 pip install -r backend/requirements.txt
-```
-Ayrıca, Playwright için tarayıcıları yüklemeniz gerekmektedir:
-```bash
 playwright install
 ```
 
-### 3. Frontend Bağımlılıklarını Yükleme
+### 2. Frontend Bağımlılıklarını Yükleme
 
 ```bash
+# Proje kök dizinindeyken
 cd frontend
 npm install
 cd ..
@@ -59,52 +54,49 @@ cd ..
 
 ## Çalıştırma
 
-Uygulamayı çalıştırmak için hem backend sunucusunun hem de frontend uygulamasının aynı anda çalışması gerekir.
-
 ### 1. Backend Sunucusunu Başlatma
 
-Yeni bir terminal penceresi açın ve aşağıdaki komutu çalıştırın:
 ```bash
 cd backend
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
-Sunucu şimdi `http://127.0.0.1:8000` adresinde çalışıyor olacaktır.
 
 ### 2. Frontend Uygulamasını Başlatma
 
-Başka bir terminal penceresi açın ve aşağıdaki komutu çalıştırın:
+Ayrı bir terminalde:
 ```bash
 cd frontend
 npm start
 ```
-Bu komut, React geliştirme sunucusunu başlatacak ve ardından Electron masaüstü uygulamasını açacaktır.
 
-Uygulama açıldığında, Ayarlar (Settings) menüsünden LLM sağlayıcılarınız için API anahtarlarınızı girerek başlayabilirsiniz.
+Uygulama açıldığında, **Ayarlar (Settings)** menüsünden, otomatize etmek istediğiniz yapay zeka servisleri (ChatGPT, Gemini vb.) için **kullanıcı adı ve parolanızı** girerek başlayabilirsiniz. Bu bilgiler, işletim sisteminizin anahtar zincirinde güvenli bir şekilde saklanacaktır.
 
 ---
 
 ## Proje Yapısı
 
+Proje, frontend ve backend olarak iki ana parçaya ayrılmıştır. Önemli dosyalar şunlardır:
+
 ```
 /
-├── backend/                # Python/FastAPI backend kodu
-│   ├── app/                # Ana uygulama modülleri
-│   │   ├── api/            # API endpoint'leri (router'lar)
-│   │   ├── core/           # Çekirdek mantık (güvenlik, prompt'lar)
-│   │   ├── models/         # Pydantic veri modelleri
-│   │   ├── services/       # İş mantığı (AI, otomasyon)
-│   │   └── main.py         # Ana FastAPI uygulama dosyası
-│   └── requirements.txt    # Python bağımlılıkları
+├── backend/
+│   ├── app/
+│   │   ├── core/
+│   │   │   ├── security.py       # Kimlik bilgilerini OS anahtar zincirinde yönetir.
+│   │   │   ├── selectors.json    # Web otomasyonu için CSS seçicilerini saklar.
+│   │   │   └── prompt_library.py # Gelişmiş prompt şablonları.
+│   │   └── services/
+│   │       ├── ai_engine.py      # Playwright ile AI web arayüzlerini otomatize eder.
+│   │       └── automation_service.py # İş platformlarını otomatize eder.
+│   └── main.py                 # Ana FastAPI uygulaması.
 │
-├── frontend/               # Electron/React frontend kodu
-│   ├── public/             # Statik dosyalar ve Electron ana betiği
-│   │   ├── electron.js     # Electron ana işlem dosyası
-│   │   └── preload.js      # Electron context bridge
-│   ├── src/                # React kaynak kodu
-│   │   ├── components/     # React bileşenleri
-│   │   ├── App.js          # Ana React bileşeni
-│   │   └── index.js        # React başlangıç noktası
-│   └── package.json        # Node.js bağımlılıkları ve script'ler
+├── frontend/
+│   ├── public/
+│   │   ├── electron.js         # Electron ana işlem (backend'e HTTP istekleri yapar).
+│   │   └── preload.js          # Güvenli IPC köprüsü.
+│   └── src/
+│       └── components/
+│           └── Settings.js     # Kullanıcı kimlik bilgilerini girmek için UI.
 │
-└── README.md               # Bu dosya
+└── README.md
 ```

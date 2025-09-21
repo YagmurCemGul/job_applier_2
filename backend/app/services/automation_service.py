@@ -2,10 +2,20 @@ import asyncio
 import random
 from playwright.async_api import async_playwright, Page, Browser
 
+# --- Custom Exception for CAPTCHA Handling ---
+
+class CaptchaRequiredException(Exception):
+    """Custom exception raised when a CAPTCHA is detected."""
+    def __init__(self, message="CAPTCHA detected. User intervention required."):
+        self.message = message
+        super().__init__(self.message)
+
+# --- Base Adapter Class ---
+
 class BasePlatformAdapter:
     """
     Abstract base class for a platform-specific automation adapter.
-    It defines the common interface for all job platforms.
+    Defines the common interface and includes anti-blocking/CAPTCHA logic.
     """
     def __init__(self, browser: Browser):
         if not browser:
@@ -16,27 +26,11 @@ class BasePlatformAdapter:
     async def initialize(self):
         """Initializes a new browser page for the adapter to use."""
         self.page = await self.browser.new_page()
-        # Emulate a common user agent to avoid basic detection
         await self.page.set_extra_http_headers({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9'
         })
         print(f"[{self.__class__.__name__}] New page initialized.")
-
-    async def login(self, credentials: dict):
-        """Logs into the platform."""
-        raise NotImplementedError("The 'login' method must be implemented by a subclass.")
-
-    async def search_jobs(self, search_criteria: dict) -> list:
-        """Searches for jobs based on given criteria and returns a list of job URLs."""
-        raise NotImplementedError("The 'search_jobs' method must be implemented by a subclass.")
-
-    async def get_job_details(self, job_url: str) -> dict:
-        """Extracts detailed information from a job posting page."""
-        raise NotImplementedError("The 'get_job_details' method must be implemented by a subclass.")
-
-    async def apply_to_job(self, job_url: str, application_data: dict):
-        """Navigates to the application page and fills out the form."""
-        raise NotImplementedError("The 'apply_to_job' method must be implemented by a subclass.")
 
     async def _human_like_delay(self, min_seconds=1, max_seconds=3):
         """Waits for a random duration to mimic human behavior."""
@@ -44,62 +38,81 @@ class BasePlatformAdapter:
         print(f"Waiting for {delay:.2f} seconds...")
         await asyncio.sleep(delay)
 
+    async def check_for_captcha(self):
+        """
+        Checks the page for common CAPTCHA indicators and raises an exception if found.
+        """
+        captcha_selectors = [
+            'iframe[src*="recaptcha"]',
+            'iframe[src*="hcaptcha"]',
+            'div[data-captcha-enable="true"]',
+            'div#captcha-container',
+        ]
+        for selector in captcha_selectors:
+            if await self.page.locator(selector).is_visible():
+                print(f"CAPTCHA DETECTED with selector: {selector}")
+                raise CaptchaRequiredException(f"CAPTCHA detected on page {self.page.url}")
+        print("No CAPTCHA detected.")
+
+    async def login(self, credentials: dict):
+        raise NotImplementedError("The 'login' method must be implemented by a subclass.")
+
+    async def search_jobs(self, search_criteria: dict) -> list:
+        raise NotImplementedError("The 'search_jobs' method must be implemented by a subclass.")
+
+    async def get_job_details(self, job_url: str) -> dict:
+        raise NotImplementedError("The 'get_job_details' method must be implemented by a subclass.")
+
+    async def apply_to_job(self, job_url: str, application_data: dict):
+        raise NotImplementedError("The 'apply_to_job' method must be implemented by a subclass.")
+
     async def close(self):
-        """Closes the browser page."""
         if self.page:
             await self.page.close()
             print(f"[{self.__class__.__name__}] Page closed.")
 
+# --- Concrete Adapter Implementation ---
 
 class LinkedInAdapter(BasePlatformAdapter):
-    """
-    Automation adapter for LinkedIn.
-    (This is a placeholder implementation)
-    """
+    """Automation adapter for LinkedIn."""
     BASE_URL = "https://www.linkedin.com"
 
     async def login(self, credentials: dict):
         print(f"[{self.__class__.__name__}] Navigating to login page...")
         await self.page.goto(f"{self.BASE_URL}/login")
-        await self._human_like_delay()
+        await self.page.wait_for_load_state('domcontentloaded')
+        await self.check_for_captcha() # Check for CAPTCHA on the login page
 
-        print(f"[{self.__class__.__name__}] Filling in credentials (username: {credentials.get('email')})...")
+        print(f"[{self.__class__.__name__}] Filling in credentials...")
         await self.page.fill("#username", credentials.get("email", ""))
         await self.page.fill("#password", credentials.get("password", ""))
+        await self._human_like_delay(0.5, 1)
         await self.page.click("button[type='submit']")
 
-        # Wait for navigation to complete, e.g., by checking for the feed page
-        await self.page.wait_for_selector("#feed-tab-icon", timeout=60000)
+        await self.page.wait_for_load_state('networkidle', timeout=60000)
+        await self.check_for_captcha() # Check again after login attempt
         print(f"[{self.__class__.__name__}] Login successful.")
 
     async def search_jobs(self, search_criteria: dict) -> list:
-        print(f"[{self.__class__.__name__}] Searching for jobs with criteria: {search_criteria}")
-        # Placeholder for actual search logic
-        # e.g., await self.page.goto(f"{self.BASE_URL}/jobs/search/?keywords={search_criteria.get('title')}")
-        await self._human_like_delay()
-        print(f"[{self.__class__.__name__}] Found 5 placeholder job URLs.")
-        return ["https://linkedin.com/jobs/view/1", "https://linkedin.com/jobs/view/2"]
+        # Placeholder implementation
+        print(f"[{self.__class__.__name__}] Searching for jobs...")
+        return ["https://linkedin.com/jobs/view/placeholder1"]
 
     async def get_job_details(self, job_url: str) -> dict:
-        print(f"[{self.__class__.__name__}] Navigating to job URL: {job_url}")
+        # Placeholder implementation
+        print(f"[{self.__class__.__name__}] Getting job details for {job_url}...")
         await self.page.goto(job_url)
-        await self._human_like_delay()
-        # Placeholder for data extraction
-        job_title = await self.page.locator('h1').first.text_content()
-        job_description = await self.page.locator('.jobs-description__content').first.text_content()
-        print(f"[{self.__class__.__name__}] Extracted job title: {job_title}")
-        return {"title": job_title, "description": job_description.strip()}
+        await self.check_for_captcha()
+        return {"title": "Placeholder Job", "description": "Placeholder description."}
 
+# --- Controller ---
 
 class AutomationController:
-    """
-    Selects the correct platform adapter and manages the automation process.
-    """
+    """Selects the correct platform adapter and manages the automation process."""
     def __init__(self, browser: Browser):
         self._browser = browser
         self._adapters = {
             "linkedin": LinkedInAdapter(browser),
-            # "indeed": IndeedAdapter(browser), # Example for future extension
         }
 
     def get_adapter(self, platform_name: str) -> BasePlatformAdapter:
@@ -108,26 +121,30 @@ class AutomationController:
             raise ValueError(f"No adapter found for platform: {platform_name}")
         return adapter
 
-# Example usage (for testing purposes)
+# Example usage
 async def main():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False, slow_mo=50)
+        browser = await p.chromium.launch(headless=False, slow_mo=100)
         controller = AutomationController(browser)
+        adapter = controller.get_adapter("linkedin")
 
-        linkedin_adapter = controller.get_adapter("linkedin")
-        await linkedin_adapter.initialize()
-
-        # This would fail without real credentials, so it's commented out.
-        # await linkedin_adapter.login({"email": "your-email", "password": "your-password"})
-
-        job_urls = await linkedin_adapter.search_jobs({"title": "Software Engineer"})
-        if job_urls:
-            details = await linkedin_adapter.get_job_details(job_urls[0])
-            print("Extracted Details:", details)
-
-        await linkedin_adapter.close()
-        await browser.close()
+        try:
+            await adapter.initialize()
+            # In a real run, credentials would come from the security module
+            # await adapter.login({"email": "your-email", "password": "your-password"})
+            await adapter.get_job_details("https://www.linkedin.com/jobs") # Test URL
+        except CaptchaRequiredException as e:
+            print(f"\n---AUTOMATION PAUSED---")
+            print(f"Reason: {e.message}")
+            print("Please solve the CAPTCHA in the browser window.")
+            print("The application would now wait for a signal from the UI to continue.")
+            # In a real app: await wait_for_user_to_solve_captcha()
+            await asyncio.sleep(30) # Simulate waiting for user
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+        finally:
+            await adapter.close()
+            await browser.close()
 
 if __name__ == "__main__":
-    # To run this file for testing: python -m app.services.automation_service
     asyncio.run(main())
