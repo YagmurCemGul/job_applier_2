@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+playwright
+cryptography
+keyring
+openai
+google-generativeai
+anthropic
+python-dotenv
+sqlalchemy
